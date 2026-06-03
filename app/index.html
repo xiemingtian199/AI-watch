@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Watch MVP</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>每日复盘</h1>
+          <p id="runMeta">正在载入今天的多模态时间线</p>
+        </div>
+        <div class="actions">
+          <button id="exportFeedback" type="button">导出反馈</button>
+          <button id="clearFeedback" type="button">清空反馈</button>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="采集概览">
+        <div>
+          <span id="eventCount">0</span>
+          <p>事件</p>
+        </div>
+        <div>
+          <span id="sourceCount">0</span>
+          <p>来源</p>
+        </div>
+        <div>
+          <span id="cardCount">0</span>
+          <p>复盘卡</p>
+        </div>
+        <div>
+          <span id="feedbackCount">0</span>
+          <p>反馈</p>
+        </div>
+      </section>
+
+      <section class="layout">
+        <div class="panel cards-panel">
+          <div class="panel-head">
+            <h2>卡片流</h2>
+            <div class="filters" role="tablist" aria-label="卡片类型">
+              <button class="filter active" data-type="all" type="button">全部</button>
+              <button class="filter" data-type="stress_event" type="button">压力</button>
+              <button class="filter" data-type="work_state" type="button">工作</button>
+              <button class="filter" data-type="relationship" type="button">沟通</button>
+              <button class="filter" data-type="action" type="button">行动</button>
+            </div>
+          </div>
+          <div id="cards" class="cards" aria-live="polite"></div>
+        </div>
+
+        <aside class="panel timeline-panel">
+          <div class="panel-head">
+            <h2>时间线</h2>
+            <span id="modeBadge" class="badge">local</span>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </aside>
+      </section>
+    </main>
+
+    <template id="cardTemplate">
+      <article class="review-card">
+        <div class="card-top">
+          <span class="type"></span>
+          <span class="confidence"></span>
+        </div>
+        <h3></h3>
+        <p class="time"></p>
+        <p class="body"></p>
+        <div class="suggestion"></div>
+        <details>
+          <summary>查看证据</summary>
+          <ul class="evidence"></ul>
+        </details>
+        <div class="feedback">
+          <button data-feedback="accurate" type="button">准确</button>
+          <button data-feedback="wrong" type="button">不准确</button>
+          <button data-feedback="mute" type="button">别再提</button>
+          <button data-feedback="watch" type="button">继续观察</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
