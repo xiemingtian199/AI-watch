@@ -1,118 +1,118 @@
-# AI Multimodal Watch MVP
+# AI Watch：本地多模态个人复盘工具
 
-This is a local validation kit for a personal AI multimodal watch concept. It implements the first MVP loop:
+AI Watch 是一个运行在个人电脑上的多模态生活数据分析原型。
 
-- Merge Apple Watch/iPhone-style and DIY sensor events into one timeline.
-- Generate daily review cards from multimodal data.
-- Show a compact card feed and timeline in a browser.
-- Capture card feedback for the next review cycle.
+它尝试将 Apple Watch 采集的心率、睡眠、活动、呼吸、环境声音等健康数据，与手机录音、人工场景备注按照时间顺序合并，生成每日复盘卡片，帮助用户理解：
 
-## Local Analysis Workbench
+- 一天中的身体负荷主要出现在哪些时段；
+- 通勤、工作、家庭交流等场景与身体状态有什么关系；
+- 哪些行为模式值得持续观察；
+- 第二天可以验证或调整什么。
 
-The recommended way to use the project is the local analysis workbench. It runs only on `127.0.0.1` and keeps imported personal data under the ignored `data/private` directory.
+项目当前处于 MVP 验证阶段，主要用于验证“可穿戴数据 + 生活场景 + AI 分析”能否产生有价值的个人洞察。
 
-On Windows, double-click:
+## 当前能力
+
+### Apple 健康数据导入
+
+支持手动导入 Apple 健康导出的 XML 或 ZIP 文件，并按指定日期提取数据。
+
+当前支持的主要数据包括：
+
+- 心率、静息心率、步行平均心率；
+- HRV 心率变异性、血氧、呼吸频率；
+- 睡眠状态；
+- 步数、步行/跑步距离、活动能量、基础能量；
+- 运动时间、站立时间、爬楼层数；
+- 环境声音暴露、日光时间、身体活动强度；
+- 步行速度、步长、步行不对称、双脚支撑比例；
+- 上下楼速度。
+
+### 多段录音导入
+
+支持一天内导入多段录音：
+
+- 通过文件选择对话框一次选择多段录音；
+- 直接将多段录音拖入工作台；
+- 文件仅复制到本机私有目录；
+- 从 `2026-06-04 07-21.m4a` 这类文件名自动识别开始时间；
+- 自动读取音频时长、编码、码率和文件大小；
+- 每段录音可以补充可靠的场景摘要。
+
+可选安装本地语音识别组件进行粗转写。粗转写结果会单独保存，不会自动作为可靠事实影响复盘卡片。
+
+### 人工场景补充
+
+可以给重要时间点补充真实场景，例如：
+
+- 出门、步行到地铁站、地铁换乘；
+- 办公室日常工作、会议、午休；
+- 家庭交流、通勤、运动；
+- 当时的主观体感和情绪。
+
+人工场景会与手表和录音数据对齐，帮助系统减少误判。
+
+### 每日复盘
+
+本地分析完成后会生成：
+
+- 每日复盘卡片；
+- 多模态时间线；
+- 卡片证据；
+- 心率和活动高负荷窗口；
+- 第二天的观察建议；
+- 准确、不准确、别再提、继续观察等反馈。
+
+## 快速开始
+
+### 环境要求
+
+- Windows
+- Python 3
+- FFmpeg，需要使用录音导入功能时安装
+
+### 启动本地工作台
+
+双击：
 
 ```text
 start-local-app.bat
 ```
 
-Or run:
+或使用 PowerShell：
 
 ```powershell
 .\start-local-app.ps1
 ```
 
-The workbench opens:
+启动后打开：
 
 ```text
 http://127.0.0.1:4180/import.html
 ```
 
-It supports:
+工作台只监听本机 `127.0.0.1`，不会向局域网或互联网开放。
 
-- Importing an Apple Health XML/ZIP for a selected date.
-- Importing timestamped audio metadata.
-- Batch importing multiple daily recordings, with start times inferred from filenames such as `2026-06-04 07-21.m4a`.
-- Selecting multiple recordings through a file dialog or dragging them into the workbench. Selected files are copied only to local `data/private/imports`.
-- Optional local rough transcription.
-- Adding manual scene/context notes.
-- Regenerating and viewing daily review cards.
+### 使用流程
 
-Optional local transcription setup:
+1. 从 iPhone 健康 App 导出全部健康数据。
+2. 在本地工作台选择健康导出文件和分析日期。
+3. 选择或拖入当天的多段录音。
+4. 为录音和重要时间点补充简短场景说明。
+5. 点击生成复盘。
+6. 打开复盘页面查看卡片和时间线。
 
-```powershell
-.\install-local-transcription.ps1
-```
+## 可选本地录音转写
 
-Rough transcripts are stored separately and do not automatically influence review cards.
-
-## Command-Line Run
-
-```powershell
-cd C:\Users\HK\Documents\Codex\2026-06-03\new-chat\outputs\ai-watch-mvp
-python src\generate_cards.py --input data\sample --date 2026-06-01 --output app\data\cards.json
-python -m http.server 4173 -d app
-```
-
-Open `http://localhost:4173`.
-
-## Optional Cloud Mode
-
-Set `OPENAI_API_KEY` before running the generator to use cloud analysis:
-
-```powershell
-$env:OPENAI_API_KEY="..."
-python src\generate_cards.py --input data\sample --date 2026-06-01 --output app\data\cards.json --cloud
-```
-
-Without an API key, the generator uses a deterministic local heuristic so the demo works offline.
-
-## Data Shape
-
-Every event is normalized to:
-
-```json
-{
-  "timestamp": "2026-06-01T09:18:00+08:00",
-  "source": "apple_watch",
-  "modality": "heart_rate",
-  "raw": {"bpm": 118},
-  "summary": "Heart rate rose during calendar handoff",
-  "confidence": 0.9,
-  "location": "Shanghai office",
-  "context": {"route": "apple", "activity": "pre-meeting"}
-}
-```
-
-## Convert Apple Health Export
-
-On iPhone:
-
-1. Open Health.
-2. Tap your profile picture or initials.
-3. Tap Export All Health Data.
-4. Share the exported zip to this computer.
-5. Put it under `data/raw/apple_export.zip`.
-
-Then convert one day:
-
-```powershell
-python src\convert_apple_health.py --input data\raw\apple_export.zip --date 2026-06-03 --output data\sample\apple_2026-06-03.jsonl
-python src\generate_cards.py --input data\sample --date 2026-06-03 --output app\data\cards.json
-```
-
-The converter extracts heart rate, resting heart rate, walking heart rate, HRV, blood oxygen, respiratory rate, sleep, steps, distance, energy, exercise, standing, environmental audio exposure, physical effort, daylight, stair activity, and walking metrics.
-
-## Transcribe A Timestamped Audio File
-
-Install the optional local transcription dependency:
+首次使用前运行：
 
 ```powershell
 .\install-local-transcription.ps1
 ```
 
-Then transcribe an audio file using its real start time:
+该脚本会将 `faster-whisper` 安装到项目本地目录 `.local-deps`，不会修改项目代码，也不会将录音上传到云端。
+
+命令行转写示例：
 
 ```powershell
 python src\transcribe_audio.py `
@@ -122,17 +122,87 @@ python src\transcribe_audio.py `
   --deps .local-deps
 ```
 
-Use `--input data` when generating cards to include both sample/manual events and private audio events:
+## 命令行使用
+
+转换 Apple 健康数据：
 
 ```powershell
-python src\generate_cards.py --input data --date 2026-06-03 --output app\data\cards.json
+python src\convert_apple_health.py `
+  --input data\raw\apple_export.zip `
+  --date 2026-06-03 `
+  --output data\private\apple_2026-06-03.jsonl
 ```
 
-## MVP Boundaries
+生成每日复盘：
 
-- This is not a medical or mental health product.
-- Card copy intentionally avoids hard diagnosis.
-- Raw media paths are represented as local references in sample data.
-- Feedback is saved in browser local storage for the demo; production should write it to a user-controlled backend.
-- The workbench accepts local file paths. It does not upload files to a remote service.
-- Personal data under `data/private` and generated cards are ignored by Git.
+```powershell
+python src\generate_cards.py `
+  --input data `
+  --date 2026-06-03 `
+  --output app\data\cards.json
+```
+
+## 数据格式
+
+不同来源的数据都会转换为统一的时间线事件：
+
+```json
+{
+  "timestamp": "2026-06-01T09:18:00+08:00",
+  "source": "apple_watch",
+  "modality": "heart_rate",
+  "raw": {"bpm": 118},
+  "summary": "Apple 健康记录心率：118 count/min",
+  "confidence": 0.9,
+  "location": "office",
+  "context": {
+    "route": "apple",
+    "activity": "work"
+  }
+}
+```
+
+## 隐私设计
+
+本项目默认采用本地优先策略：
+
+- 工作台只运行在本机；
+- 导入文件保存在 `data/private`；
+- 拖入的录音保存在 `data/private/imports`；
+- 原始健康数据、录音、转写结果和生成卡片默认被 Git 忽略；
+- 不会自动上传数据到云端或 GitHub；
+- GitHub 仓库仅同步代码、说明和脱敏样例。
+
+请不要将个人健康数据、录音或第三方对话内容提交到公开仓库。
+
+## 项目结构
+
+```text
+app/
+  import.html              本地数据导入工作台
+  index.html               每日复盘和时间线
+src/
+  local_app.py             本地分析服务
+  convert_apple_health.py  Apple 健康数据转换
+  transcribe_audio.py      本地录音粗转写
+  generate_cards.py        复盘卡生成器
+data/
+  sample/                  脱敏样例数据
+  private/                 本机私有数据，Git 默认忽略
+```
+
+## 当前限制
+
+- 当前复盘主要基于规则分析，仍处于验证阶段；
+- 音频中的广播、新闻、环境噪声容易干扰粗转写；
+- 产品不能用于医学诊断、心理诊断或健康风险判断；
+- Apple 健康导出属于批量导入，暂不支持实时同步；
+- 用户仍需要为重要时间段补充少量可靠上下文。
+
+## 后续方向
+
+- 更准确地区分本人说话、他人说话、媒体播放和环境噪声；
+- 自动识别录音中的有效场景片段；
+- 增加跨天趋势和个人基线分析；
+- 对比通勤日、会议日、普通办公日和休息日；
+- 支持更完整的本地模型分析和隐私控制。
