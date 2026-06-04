@@ -43,31 +43,19 @@
           <button class="primary-action" type="submit">导入并生成复盘</button>
         </form>
 
-        <form id="audioForm" class="tool-panel">
+        <form id="audioBatchForm" class="tool-panel wide-tool">
           <div class="tool-heading">
             <span class="tool-number">2</span>
             <div>
-              <h2>导入录音</h2>
-              <p>读取录音编码、大小和时长，按开始时间加入时间线。</p>
+              <h2>批量导入录音</h2>
+              <p>一次添加多段录音。文件名类似“2026-06-04 07-21.m4a”时可自动识别开始时间。</p>
             </div>
           </div>
-          <label>
-            录音文件路径
-            <input name="path" required placeholder="D:\...\2026-06-04 07-21.m4a">
-          </label>
-          <label>
-            录音开始时间
-            <input name="start" type="datetime-local" required>
-          </label>
-          <label>
-            场景摘要
-            <textarea name="summary" rows="3" placeholder="例如：早晨家庭交流、通勤、地铁广播、到达办公室后的零散对话。"></textarea>
-          </label>
-          <label class="check-row">
-            <input name="transcribe" type="checkbox">
-            <span>执行本地粗转写（耗时较长，结果不会自动进入复盘）</span>
-          </label>
-          <button class="primary-action" type="submit">导入录音元数据</button>
+          <div id="audioRows" class="audio-rows"></div>
+          <div class="batch-actions">
+            <button id="addAudioRow" type="button">添加一段录音</button>
+            <button class="primary-action" type="submit">批量导入并生成复盘</button>
+          </div>
         </form>
 
         <form id="contextForm" class="tool-panel">
@@ -124,6 +112,26 @@
         <dl id="resultStats" class="result-stats"></dl>
       </section>
     </main>
+    <template id="audioRowTemplate">
+      <fieldset class="audio-row">
+        <div class="audio-row-head">
+          <strong>录音 <span class="audio-index"></span></strong>
+          <button class="remove-audio" type="button" title="移除这段录音">移除</button>
+        </div>
+        <label>
+          录音文件路径
+          <input data-field="path" required placeholder="D:\...\2026-06-04 07-21.m4a">
+        </label>
+        <label>
+          开始时间（可留空自动识别）
+          <input data-field="start" type="datetime-local">
+        </label>
+        <label>
+          场景摘要
+          <textarea data-field="summary" rows="2" placeholder="例如：早晨家庭交流、通勤和地铁广播。"></textarea>
+        </label>
+      </fieldset>
+    </template>
     <script src="import.js"></script>
   </body>
 </html>

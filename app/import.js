@@ -72,13 +72,59 @@ document.querySelectorAll("button[type=submit]").forEach((button) => {
 });
 
 wireForm("healthForm", "/api/import-health");
-wireForm("audioForm", "/api/import-audio", (data) => ({
-  ...data,
-  start: localIso(data.start),
-  transcribe: data.transcribe === "on",
-}));
 wireForm("contextForm", "/api/add-context", (data) => ({...data, timestamp: localIso(data.timestamp)}));
 wireForm("generateForm", "/api/generate");
+
+const audioRows = document.getElementById("audioRows");
+const audioTemplate = document.getElementById("audioRowTemplate");
+
+function refreshAudioIndexes() {
+  audioRows.querySelectorAll(".audio-row").forEach((row, index) => {
+    row.querySelector(".audio-index").textContent = index + 1;
+    row.querySelector(".remove-audio").disabled = audioRows.children.length === 1;
+  });
+}
+
+function addAudioRow(values = {}) {
+  const row = audioTemplate.content.firstElementChild.cloneNode(true);
+  for (const [field, value] of Object.entries(values)) {
+    const input = row.querySelector(`[data-field="${field}"]`);
+    if (input) input.value = value;
+  }
+  row.querySelector(".remove-audio").addEventListener("click", () => {
+    row.remove();
+    refreshAudioIndexes();
+  });
+  audioRows.appendChild(row);
+  refreshAudioIndexes();
+}
+
+document.getElementById("addAudioRow").addEventListener("click", () => addAudioRow());
+
+document.getElementById("audioBatchForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  const items = [...audioRows.querySelectorAll(".audio-row")].map((row) => {
+    const start = row.querySelector('[data-field="start"]').value;
+    return {
+      path: row.querySelector('[data-field="path"]').value.trim(),
+      start: start ? localIso(start) : "",
+      summary: row.querySelector('[data-field="summary"]').value.trim(),
+    };
+  }).filter((item) => item.path);
+  button.disabled = true;
+  button.textContent = "批量处理中...";
+  try {
+    await post("/api/import-audios", {items});
+  } catch (error) {
+    setStatus("失败", error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = button.dataset.label;
+  }
+});
+
+addAudioRow();
 
 fetch("/api/status")
   .then((response) => response.json())
@@ -92,6 +138,4 @@ const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toIS
 document.querySelectorAll('input[type="date"]').forEach((input) => {
   input.value = localDate.slice(0, 10);
 });
-document.querySelectorAll('input[type="datetime-local"]').forEach((input) => {
-  input.value = localDate.slice(0, 16);
-});
+document.querySelector('#contextForm input[type="datetime-local"]').value = localDate.slice(0, 16);

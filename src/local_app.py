@@ -1,6 +1,7 @@
 import argparse
 import json
 import mimetypes
+import re
 import subprocess
 import sys
 import threading
@@ -120,6 +121,16 @@ def write_audio_session(path, start_iso, summary):
     return row, output
 
 
+def infer_audio_start(path):
+    match = re.search(
+        r"(?P<date>\d{4}-\d{2}-\d{2})[ _](?P<hour>\d{2})[-_:](?P<minute>\d{2})",
+        path.stem,
+    )
+    if not match:
+        return None
+    return f"{match.group('date')}T{match.group('hour')}:{match.group('minute')}:00+08:00"
+
+
 def transcribe_audio(path, start_iso):
     deps = ROOT / ".local-deps"
     if not deps.exists():
@@ -201,8 +212,11 @@ class LocalHandler(SimpleHTTPRequestHandler):
                 })
             if path == "/api/import-audio":
                 source = resolve_user_path(payload["path"])
+                start_iso = payload.get("start") or infer_audio_start(source)
+                if not start_iso:
+                    raise ValueError("无法从文件名识别开始时间，请手动填写")
                 row, output = write_audio_session(
-                    source, payload["start"], payload.get("summary", "").strip()
+                    source, start_iso, payload.get("summary", "").strip()
                 )
                 transcript = None
                 transcript_output = None
@@ -215,6 +229,37 @@ class LocalHandler(SimpleHTTPRequestHandler):
                     "transcript": transcript,
                     "transcriptOutput": str(transcript_output) if transcript_output else None,
                     "result": result,
+                })
+            if path == "/api/import-audios":
+                items = payload.get("items") or []
+                if not items:
+                    raise ValueError("请至少添加一段录音")
+                imported = []
+                dates = set()
+                for item in items:
+                    source = resolve_user_path(item["path"])
+                    start_iso = item.get("start") or infer_audio_start(source)
+                    if not start_iso:
+                        raise ValueError(f"无法从文件名识别开始时间：{source.name}")
+                    row, output = write_audio_session(
+                        source, start_iso, item.get("summary", "").strip()
+                    )
+                    imported.append({
+                        "file": source.name,
+                        "start": row["timestamp"],
+                        "end": row["end_timestamp"],
+                        "output": str(output),
+                        "sizeMbPerHour": row["raw"]["size_mb_per_hour"],
+                    })
+                    dates.add(row["timestamp"][:10])
+                results = {date: generate_for_date(date) for date in sorted(dates)}
+                latest = results[sorted(results)[-1]]
+                return json_response(self, {
+                    "ok": True,
+                    "message": f"已导入 {len(imported)} 段录音",
+                    "imported": imported,
+                    "results": results,
+                    "result": latest,
                 })
             if path == "/api/add-context":
                 event, output = append_context(payload)
