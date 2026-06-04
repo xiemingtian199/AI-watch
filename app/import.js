@@ -77,6 +77,8 @@ wireForm("generateForm", "/api/generate");
 
 const audioRows = document.getElementById("audioRows");
 const audioTemplate = document.getElementById("audioRowTemplate");
+const audioDropzone = document.getElementById("audioDropzone");
+const audioFilePicker = document.getElementById("audioFilePicker");
 
 function refreshAudioIndexes() {
   audioRows.querySelectorAll(".audio-row").forEach((row, index) => {
@@ -100,6 +102,79 @@ function addAudioRow(values = {}) {
 }
 
 document.getElementById("addAudioRow").addEventListener("click", () => addAudioRow());
+
+function startToLocalInput(value) {
+  return value ? value.slice(0, 16) : "";
+}
+
+async function uploadAudioFile(file) {
+  setStatus("上传中", `正在复制 ${file.name} 到本机私有目录...`);
+  const response = await fetch("/api/upload-audio", {
+    method: "POST",
+    headers: {"X-Filename": encodeURIComponent(file.name)},
+    body: file,
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || `无法读取 ${file.name}`);
+  }
+  const emptyRow = [...audioRows.querySelectorAll(".audio-row")].find((row) => {
+    return !row.querySelector('[data-field="path"]').value.trim();
+  });
+  const values = {
+    path: result.path,
+    start: startToLocalInput(result.start),
+    summary: "",
+  };
+  if (emptyRow) {
+    for (const [field, value] of Object.entries(values)) {
+      emptyRow.querySelector(`[data-field="${field}"]`).value = value;
+    }
+  } else {
+    addAudioRow(values);
+  }
+  refreshAudioIndexes();
+  return result;
+}
+
+async function handleAudioFiles(files) {
+  const selected = [...files].filter((file) => file.size > 0);
+  if (!selected.length) return;
+  try {
+    const results = [];
+    for (const file of selected) {
+      results.push(await uploadAudioFile(file));
+    }
+    setStatus("已选择", `已添加 ${results.length} 段录音，请补充场景摘要后批量导入。`);
+  } catch (error) {
+    setStatus("失败", error.message);
+  }
+}
+
+audioDropzone.addEventListener("click", () => audioFilePicker.click());
+audioDropzone.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    audioFilePicker.click();
+  }
+});
+audioFilePicker.addEventListener("change", () => {
+  handleAudioFiles(audioFilePicker.files);
+  audioFilePicker.value = "";
+});
+for (const eventName of ["dragenter", "dragover"]) {
+  audioDropzone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    audioDropzone.classList.add("dragging");
+  });
+}
+for (const eventName of ["dragleave", "drop"]) {
+  audioDropzone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    audioDropzone.classList.remove("dragging");
+  });
+}
+audioDropzone.addEventListener("drop", (event) => handleAudioFiles(event.dataTransfer.files));
 
 document.getElementById("audioBatchForm").addEventListener("submit", async (event) => {
   event.preventDefault();

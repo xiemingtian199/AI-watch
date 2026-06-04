@@ -2,6 +2,7 @@ import argparse
 import json
 import mimetypes
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -18,6 +19,7 @@ from generate_cards import build_timeline, heuristic_cards, load_events
 ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = ROOT / "app"
 PRIVATE_DIR = ROOT / "data" / "private"
+IMPORTS_DIR = PRIVATE_DIR / "imports"
 CARDS_PATH = APP_DIR / "data" / "cards.json"
 
 
@@ -42,6 +44,37 @@ def resolve_user_path(value):
     if not path.exists():
         raise FileNotFoundError(f"找不到文件：{path}")
     return path
+
+
+def safe_filename(value):
+    name = Path(value).name
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
+    if not name:
+        raise ValueError("文件名无效")
+    return name
+
+
+def receive_upload(handler):
+    length = int(handler.headers.get("Content-Length", "0"))
+    if length <= 0:
+        raise ValueError("没有收到文件内容")
+    if length > 2_000_000_000:
+        raise ValueError("单个文件不能超过 2 GB")
+    filename = safe_filename(unquote(handler.headers.get("X-Filename", "")))
+    IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    target = IMPORTS_DIR / filename
+    if target.exists():
+        stem, suffix = target.stem, target.suffix
+        target = IMPORTS_DIR / f"{stem}_{datetime.now().strftime('%H%M%S')}{suffix}"
+    remaining = length
+    with target.open("wb") as output:
+        while remaining:
+            chunk = handler.rfile.read(min(1024 * 1024, remaining))
+            if not chunk:
+                raise ConnectionError("文件上传中断")
+            output.write(chunk)
+            remaining -= len(chunk)
+    return target
 
 
 def generate_for_date(target_date):
@@ -197,8 +230,19 @@ class LocalHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            payload = read_json(self)
             path = urlparse(self.path).path
+            if path == "/api/upload-audio":
+                uploaded = receive_upload(self)
+                inferred_start = infer_audio_start(uploaded)
+                return json_response(self, {
+                    "ok": True,
+                    "message": f"已接收 {uploaded.name}",
+                    "path": str(uploaded),
+                    "filename": uploaded.name,
+                    "start": inferred_start,
+                    "sizeBytes": uploaded.stat().st_size,
+                })
+            payload = read_json(self)
             if path == "/api/import-health":
                 target_date = payload["date"]
                 source = resolve_user_path(payload["path"])

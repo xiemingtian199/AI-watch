@@ -155,6 +155,32 @@ h3 {
   gap: 12px;
 }
 
+.dropzone {
+  display: grid;
+  gap: 5px;
+  border: 1px dashed oklch(0.7 0.07 246);
+  border-radius: 8px;
+  padding: 22px;
+  background: oklch(0.97 0.012 246);
+  color: var(--accent-dark);
+  cursor: pointer;
+  text-align: center;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+
+.dropzone span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dropzone:hover,
+.dropzone.dragging,
+.dropzone:focus-visible {
+  border-color: var(--accent);
+  background: oklch(0.94 0.025 246);
+  outline: none;
+}
+
 .audio-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.6fr);

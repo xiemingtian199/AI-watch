@@ -51,6 +51,11 @@
               <p>一次添加多段录音。文件名类似“2026-06-04 07-21.m4a”时可自动识别开始时间。</p>
             </div>
           </div>
+          <div id="audioDropzone" class="dropzone" tabindex="0" role="button" aria-label="选择或拖入录音文件">
+            <strong>点击选择录音，或将多段录音拖到这里</strong>
+            <span>支持 M4A、MP3、WAV 等音频文件，文件仅复制到本机私有目录。</span>
+            <input id="audioFilePicker" type="file" accept="audio/*,.m4a,.mp3,.wav,.aac,.flac" multiple hidden>
+          </div>
           <div id="audioRows" class="audio-rows"></div>
           <div class="batch-actions">
             <button id="addAudioRow" type="button">添加一段录音</button>

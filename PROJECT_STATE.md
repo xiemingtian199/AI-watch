@@ -73,6 +73,7 @@ Use the workbench daily:
 
 - Import the latest Apple Health export for the target date.
 - Batch import multiple timestamped recordings. Filenames such as `2026-06-04 07-21.m4a` automatically provide the recording start time.
+- Recordings can be selected through a file dialog or dragged into the workbench; no manual path entry is required.
 - Add a short reliable scene summary for each recording.
 - Add manual context for unexplained heart-rate/activity windows.
 - Review cards and track whether audio improves the usefulness of the daily review.

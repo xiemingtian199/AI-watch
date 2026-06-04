@@ -34,6 +34,7 @@ It supports:
 - Importing an Apple Health XML/ZIP for a selected date.
 - Importing timestamped audio metadata.
 - Batch importing multiple daily recordings, with start times inferred from filenames such as `2026-06-04 07-21.m4a`.
+- Selecting multiple recordings through a file dialog or dragging them into the workbench. Selected files are copied only to local `data/private/imports`.
 - Optional local rough transcription.
 - Adding manual scene/context notes.
 - Regenerating and viewing daily review cards.
