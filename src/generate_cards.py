@@ -25,7 +25,7 @@ def parse_time(value):
 
 def load_events(input_dir, target_date):
     events = []
-    for path in sorted(Path(input_dir).glob("*.jsonl")):
+    for path in sorted(Path(input_dir).rglob("*.jsonl")):
         with path.open("r", encoding="utf-8") as handle:
             for line_number, line in enumerate(handle, 1):
                 if not line.strip():
@@ -207,6 +207,37 @@ def add_activity_cards(cards, events):
         ))
 
 
+def add_audio_cards(cards, events):
+    sessions = [
+        event for event in events
+        if event.get("modality") == "audio_session"
+    ]
+    quality_events = [
+        event for event in events
+        if event.get("modality") == "capture_quality"
+    ]
+    for index, session in enumerate(sessions):
+        start = parse_time(session["timestamp"])
+        end_value = session.get("end_timestamp")
+        end = parse_time(end_value) if end_value else start
+        related_health = [
+            event for event in events
+            if event.get("source") in {"apple_watch", "iphone"}
+            and start <= parse_time(event["timestamp"]) <= end
+        ]
+        evidence = [session] + quality_events + related_health[:4]
+        cards.append(make_card(
+            f"card-audio-session-{index}",
+            "behavior_pattern",
+            "上午录音补充了手表无法看到的场景",
+            f"{start.strftime('%H:%M')} - {end.strftime('%H:%M')}",
+            session.get("summary", "录音提供了这一时段的声音场景。"),
+            "下一次录音建议提高声音触发阈值，并只把高置信度语音片段加入复盘时间线。",
+            evidence,
+            session.get("confidence", 0.62),
+        ))
+
+
 def add_context_cards(cards, events):
     ignored_activities = {"sleep_or_rest", "morning", "work", "lunch", "evening", "late_routine"}
     activities = Counter(
@@ -251,8 +282,11 @@ def add_context_cards(cards, events):
 
     relationship_events = [
         event for event in events
-        if event.get("context", {}).get("activity") in {"family_chat", "colleague_chat", "client_call"}
-        or "对话" in (event.get("summary") or "")
+        if event.get("source") != "audio_analysis"
+        and (
+            event.get("context", {}).get("activity") in {"family_chat", "colleague_chat", "client_call"}
+            or "对话" in (event.get("summary") or "")
+        )
     ]
     if relationship_events:
         cards.append(make_card(
@@ -292,6 +326,7 @@ def heuristic_cards(events, target_date):
 
     add_heart_cards(cards, events, heart_events)
     add_activity_cards(cards, events)
+    add_audio_cards(cards, events)
     add_context_cards(cards, events)
 
     source_counts = Counter(event.get("source", "unknown") for event in events)

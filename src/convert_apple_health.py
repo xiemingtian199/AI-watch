@@ -7,13 +7,30 @@ from xml.etree.ElementTree import iterparse
 
 
 TYPE_MAP = {
-    "HKQuantityTypeIdentifierHeartRate": ("heart_rate", "bpm"),
-    "HKQuantityTypeIdentifierStepCount": ("step_count", "count"),
-    "HKQuantityTypeIdentifierDistanceWalkingRunning": ("walking_running_distance", "m"),
-    "HKQuantityTypeIdentifierActiveEnergyBurned": ("active_energy", "kcal"),
-    "HKQuantityTypeIdentifierAppleExerciseTime": ("exercise_time", "min"),
-    "HKQuantityTypeIdentifierFlightsClimbed": ("flights_climbed", "count"),
-    "HKQuantityTypeIdentifierWalkingSpeed": ("walking_speed", "m/s"),
+    "HKQuantityTypeIdentifierHeartRate": ("heart_rate", "bpm", True),
+    "HKQuantityTypeIdentifierRestingHeartRate": ("resting_heart_rate", "bpm", True),
+    "HKQuantityTypeIdentifierWalkingHeartRateAverage": ("walking_heart_rate_average", "bpm", True),
+    "HKQuantityTypeIdentifierHeartRateVariabilitySDNN": ("heart_rate_variability", "value", True),
+    "HKQuantityTypeIdentifierOxygenSaturation": ("oxygen_saturation", "value", True),
+    "HKQuantityTypeIdentifierRespiratoryRate": ("respiratory_rate", "value", True),
+    "HKQuantityTypeIdentifierStepCount": ("step_count", "value", True),
+    "HKQuantityTypeIdentifierDistanceWalkingRunning": ("walking_running_distance", "value", True),
+    "HKQuantityTypeIdentifierActiveEnergyBurned": ("active_energy", "value", True),
+    "HKQuantityTypeIdentifierBasalEnergyBurned": ("basal_energy", "value", True),
+    "HKQuantityTypeIdentifierAppleExerciseTime": ("exercise_time", "value", True),
+    "HKQuantityTypeIdentifierAppleStandTime": ("stand_time", "value", True),
+    "HKQuantityTypeIdentifierFlightsClimbed": ("flights_climbed", "value", True),
+    "HKQuantityTypeIdentifierWalkingSpeed": ("walking_speed", "value", True),
+    "HKQuantityTypeIdentifierWalkingStepLength": ("walking_step_length", "value", True),
+    "HKQuantityTypeIdentifierWalkingAsymmetryPercentage": ("walking_asymmetry", "value", True),
+    "HKQuantityTypeIdentifierWalkingDoubleSupportPercentage": ("walking_double_support", "value", True),
+    "HKQuantityTypeIdentifierStairAscentSpeed": ("stair_ascent_speed", "value", True),
+    "HKQuantityTypeIdentifierStairDescentSpeed": ("stair_descent_speed", "value", True),
+    "HKQuantityTypeIdentifierEnvironmentalAudioExposure": ("environmental_audio_exposure", "value", True),
+    "HKQuantityTypeIdentifierTimeInDaylight": ("time_in_daylight", "value", True),
+    "HKQuantityTypeIdentifierPhysicalEffort": ("physical_effort", "value", True),
+    "HKCategoryTypeIdentifierSleepAnalysis": ("sleep_analysis", "value", False),
+    "HKCategoryTypeIdentifierAppleStandHour": ("stand_hour", "value", False),
 }
 
 
@@ -52,17 +69,33 @@ def source_label(source_name):
 
 
 def build_summary(modality, value, unit):
-    if modality == "heart_rate":
-        return f"Apple 健康记录心率 {value} {unit}"
-    if modality == "step_count":
-        return f"Apple 健康记录步数 {value}"
-    if modality == "walking_running_distance":
-        return f"Apple 健康记录步行/跑步距离 {value} {unit}"
-    if modality == "active_energy":
-        return f"Apple 健康记录活动能量 {value} {unit}"
-    if modality == "exercise_time":
-        return f"Apple 健康记录运动时间 {value} {unit}"
-    return f"Apple 健康记录 {modality}: {value} {unit}".strip()
+    labels = {
+        "heart_rate": "心率",
+        "resting_heart_rate": "静息心率",
+        "walking_heart_rate_average": "步行平均心率",
+        "heart_rate_variability": "心率变异性",
+        "oxygen_saturation": "血氧",
+        "respiratory_rate": "呼吸频率",
+        "step_count": "步数",
+        "walking_running_distance": "步行/跑步距离",
+        "active_energy": "活动能量",
+        "basal_energy": "基础能量",
+        "exercise_time": "运动时间",
+        "stand_time": "站立时间",
+        "flights_climbed": "爬楼层数",
+        "walking_speed": "步行速度",
+        "walking_step_length": "步长",
+        "walking_asymmetry": "步行不对称比例",
+        "walking_double_support": "双脚支撑比例",
+        "stair_ascent_speed": "上楼速度",
+        "stair_descent_speed": "下楼速度",
+        "environmental_audio_exposure": "环境声音暴露",
+        "time_in_daylight": "日光时间",
+        "physical_effort": "身体活动强度",
+        "sleep_analysis": "睡眠状态",
+        "stand_hour": "站立小时",
+    }
+    return f"Apple 健康记录{labels.get(modality, modality)}：{value} {unit}".strip()
 
 
 def convert(input_path, output_path, date=None, source_filter=None):
@@ -97,16 +130,19 @@ def convert(input_path, output_path, date=None, source_filter=None):
                 elem.clear()
                 continue
 
-            modality, default_unit = TYPE_MAP[record_type]
+            modality, default_unit, numeric = TYPE_MAP[record_type]
             unit = elem.attrib.get("unit") or default_unit
             value_text = elem.attrib.get("value")
-            try:
-                value = float(value_text)
-                if value.is_integer():
-                    value = int(value)
-            except (TypeError, ValueError):
-                elem.clear()
-                continue
+            if numeric:
+                try:
+                    value = float(value_text)
+                    if value.is_integer():
+                        value = int(value)
+                except (TypeError, ValueError):
+                    elem.clear()
+                    continue
+            else:
+                value = value_text or "unknown"
 
             raw_key = "bpm" if modality == "heart_rate" else "value"
             event = {

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Watch 本地分析工作台</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>本地分析工作台</h1>
+          <p>手动导入健康数据、录音和场景说明，在本机生成每日复盘。</p>
+        </div>
+        <div class="actions">
+          <a class="button-link primary-link" href="index.html">查看复盘</a>
+        </div>
+      </header>
+
+      <section class="privacy-banner">
+        <strong>本地处理</strong>
+        <span id="privacyText">导入的数据保存在本机，不会自动上传或提交到 GitHub。</span>
+      </section>
+
+      <section class="workspace-grid">
+        <form id="healthForm" class="tool-panel">
+          <div class="tool-heading">
+            <span class="tool-number">1</span>
+            <div>
+              <h2>导入 Apple 健康</h2>
+              <p>选择 Apple 健康导出的 XML 或 ZIP，并提取指定日期。</p>
+            </div>
+          </div>
+          <label>
+            健康导出文件路径
+            <input name="path" required placeholder="D:\...\apple_health_export\导出.xml">
+          </label>
+          <label>
+            分析日期
+            <input name="date" type="date" required>
+          </label>
+          <button class="primary-action" type="submit">导入并生成复盘</button>
+        </form>
+
+        <form id="audioForm" class="tool-panel">
+          <div class="tool-heading">
+            <span class="tool-number">2</span>
+            <div>
+              <h2>导入录音</h2>
+              <p>读取录音编码、大小和时长，按开始时间加入时间线。</p>
+            </div>
+          </div>
+          <label>
+            录音文件路径
+            <input name="path" required placeholder="D:\...\2026-06-04 07-21.m4a">
+          </label>
+          <label>
+            录音开始时间
+            <input name="start" type="datetime-local" required>
+          </label>
+          <label>
+            场景摘要
+            <textarea name="summary" rows="3" placeholder="例如：早晨家庭交流、通勤、地铁广播、到达办公室后的零散对话。"></textarea>
+          </label>
+          <label class="check-row">
+            <input name="transcribe" type="checkbox">
+            <span>执行本地粗转写（耗时较长，结果不会自动进入复盘）</span>
+          </label>
+          <button class="primary-action" type="submit">导入录音元数据</button>
+        </form>
+
+        <form id="contextForm" class="tool-panel">
+          <div class="tool-heading">
+            <span class="tool-number">3</span>
+            <div>
+              <h2>补充场景说明</h2>
+              <p>给心率峰值、通勤或工作时段补充真实上下文。</p>
+            </div>
+          </div>
+          <label>
+            时间
+            <input name="timestamp" type="datetime-local" required>
+          </label>
+          <label>
+            场景类型
+            <select name="activity">
+              <option value="commute">通勤</option>
+              <option value="office_work">办公室工作</option>
+              <option value="family_chat">家庭交流</option>
+              <option value="lunch_break">午休</option>
+              <option value="manual_note">其他</option>
+            </select>
+          </label>
+          <label>
+            场景说明
+            <textarea name="text" rows="4" required placeholder="当时发生了什么？身体或情绪感受如何？"></textarea>
+          </label>
+          <button class="primary-action" type="submit">加入时间线</button>
+        </form>
+
+        <form id="generateForm" class="tool-panel compact-tool">
+          <div class="tool-heading">
+            <span class="tool-number">4</span>
+            <div>
+              <h2>重新生成复盘</h2>
+              <p>使用当前本地数据重新分析指定日期。</p>
+            </div>
+          </div>
+          <label>
+            分析日期
+            <input name="date" type="date" required>
+          </label>
+          <button class="primary-action" type="submit">重新生成</button>
+        </form>
+      </section>
+
+      <section class="result-console" aria-live="polite">
+        <div class="result-head">
+          <h2>处理状态</h2>
+          <span id="statusBadge" class="badge">等待操作</span>
+        </div>
+        <p id="statusMessage">选择一项操作开始。大型 Apple 健康 XML 可能需要几十秒处理。</p>
+        <dl id="resultStats" class="result-stats"></dl>
+      </section>
+    </main>
+    <script src="import.js"></script>
+  </body>
+</html>

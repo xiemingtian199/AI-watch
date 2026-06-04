@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .env
+.local-deps/
 media/
 feedback-export.json
 data/raw/

@@ -13,20 +13,28 @@ Personal AI multimodal watch MVP for efficiency users. The current focus is the 
 
 - `src/convert_apple_health.py`: converts Apple Health `export.xml` or export zip into JSONL timeline events.
 - `src/generate_cards.py`: generates daily review cards from JSONL events.
-- `app/`: static browser demo.
+- `src/local_app.py`: local-only analysis service for manual imports and review generation.
+- `src/transcribe_audio.py`: optional local rough transcription with absolute timestamps.
+- `app/import.html`: local analysis workbench.
+- `app/index.html`: review cards and timeline.
 - `data/sample/apple_2026-06-01.jsonl` and `data/sample/diy_2026-06-01.jsonl`: synthetic sample data.
 
 ## Local Run
 
 ```powershell
-python src\generate_cards.py --input data\sample --date 2026-06-01 --output app\data\cards.json
-python -m http.server 4173 -d app
+.\start-local-app.ps1
 ```
 
 Open:
 
 ```text
-http://localhost:4173
+http://127.0.0.1:4180/import.html
+```
+
+Optional local rough transcription:
+
+```powershell
+.\install-local-transcription.ps1
 ```
 
 ## Privacy Policy For Git Sync
@@ -61,18 +69,9 @@ This personal data is intentionally excluded from Git by default.
 
 ## Next Step
 
-Test VoxRec for lightweight audio capture:
+Use the workbench daily:
 
-- Space Saver AAC.
-- Voice Activation / Sound Threshold.
-- No real-time transcription at first.
-- 30-60 minute commute or office segment.
-- Record file size, battery drain, export behavior, and whether start time is preserved.
-
-Then add an audio manifest such as:
-
-```csv
-start,end,source,file,scene,notes
-2026-06-04T07:30:00+08:00,2026-06-04T08:00:00+08:00,voxrec,2026-06-04_0730_commute.m4a,commute,voice activated recording
-```
-
+- Import the latest Apple Health export for the target date.
+- Import timestamped recordings and add a short reliable scene summary.
+- Add manual context for unexplained heart-rate/activity windows.
+- Review cards and track whether audio improves the usefulness of the daily review.
