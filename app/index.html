@@ -1,92 +1,441 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>AI Watch MVP</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#176b51" />
+    <title>AI Watch · 个人生活工作台</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="vendor/chart.umd.js"></script>
+    <script defer src="vendor/lucide.js"></script>
+    <script defer src="app.js"></script>
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div>
-          <h1>每日复盘</h1>
-          <p id="runMeta">正在载入今天的多模态时间线</p>
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#daily"
+        ><span class="brand-mark"><i data-lucide="audio-lines"></i></span
+        ><span>AI WATCH<small>个人生活工作台</small></span></a
+      >
+      <nav class="main-nav" aria-label="主导航">
+        <button data-view="daily" class="nav-item active">
+          <i data-lucide="panels-top-left"></i>每日复盘<span
+            class="nav-dot"
+          ></span>
+        </button>
+        <button data-view="trends" class="nav-item">
+          <i data-lucide="chart-no-axes-combined"></i>个人时间线
+        </button>
+        <button data-view="imports" class="nav-item">
+          <i data-lucide="folder-sync"></i>数据中心
+        </button>
+      </nav>
+      <section
+        class="profile"
+        id="profilePanel"
+        aria-label="人物介绍"
+      ></section>
+      <div class="sidebar-bottom">
+        <label class="dataset-label" for="datasetSelect">当前资料</label>
+        <select id="datasetSelect">
+          <option value="personal">我的记录</option>
+          <option value="demo">示例体验</option>
+        </select>
+        <div class="local-state">
+          <span></span>本地存储<i data-lucide="shield-check"></i>
         </div>
-        <div class="actions">
-          <a class="button-link primary-link" href="import.html">导入数据</a>
-          <button id="exportFeedback" type="button">导出反馈</button>
-          <button id="clearFeedback" type="button">清空反馈</button>
+      </div>
+    </aside>
+    <div class="sidebar-shade" id="sidebarShade"></div>
+    <main>
+      <header class="topbar">
+        <div class="breadcrumb">
+          <button
+            class="icon-button mobile-menu"
+            id="menuButton"
+            aria-label="展开侧栏"
+            title="展开侧栏"
+          >
+            <i data-lucide="menu"></i></button
+          ><span>我的空间</span><i data-lucide="chevron-right"></i
+          ><strong id="breadcrumb">每日复盘</strong>
+        </div>
+        <div class="top-actions">
+          <span class="local-pill"><span></span>仅在此电脑</span
+          ><button class="primary" id="uploadButton">
+            <i data-lucide="upload"></i>上传记录
+          </button>
         </div>
       </header>
-
-      <section class="metrics" aria-label="采集概览">
-        <div>
-          <span id="eventCount">0</span>
-          <p>事件</p>
+      <div class="workspace">
+        <div class="demo-banner" id="demoBanner" hidden>
+          <span
+            ><i data-lucide="flask-conical"></i>示例体验<span
+              class="banner-detail"
+              >虚构人物与数据 · 与个人记录独立</span
+            ></span
+          ><button class="text-button" id="usePersonal">
+            进入我的记录<i data-lucide="arrow-up-right"></i>
+          </button>
         </div>
-        <div>
-          <span id="sourceCount">0</span>
-          <p>来源</p>
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow" id="pageEyebrow">YOUR DAY, IN PERSPECTIVE</div>
+            <h1 id="pageTitle">每日复盘</h1>
+            <p id="pageSubtitle">正在读取本地记录…</p>
+          </div>
+          <div class="date-controls" id="dateControls">
+            <button
+              class="icon-button"
+              id="previousDay"
+              aria-label="前一天"
+              title="前一天"
+            >
+              <i data-lucide="chevron-left"></i></button
+            ><label class="date-input"
+              ><i data-lucide="calendar-days"></i
+              ><input
+                type="date"
+                id="selectedDate"
+                aria-label="查看日期" /></label
+            ><button
+              class="icon-button"
+              id="nextDay"
+              aria-label="后一天"
+              title="后一天"
+            >
+              <i data-lucide="chevron-right"></i></button
+            ><button class="subtle" id="todayButton">今天</button>
+          </div>
         </div>
-        <div>
-          <span id="cardCount">0</span>
-          <p>复盘卡</p>
-        </div>
-        <div>
-          <span id="feedbackCount">0</span>
-          <p>反馈</p>
-        </div>
-      </section>
-
-      <section class="layout">
-        <div class="panel cards-panel">
-          <div class="panel-head">
-            <h2>卡片流</h2>
-            <div class="filters" role="tablist" aria-label="卡片类型">
-              <button class="filter active" data-type="all" type="button">全部</button>
-              <button class="filter" data-type="stress_event" type="button">压力</button>
-              <button class="filter" data-type="work_state" type="button">工作</button>
-              <button class="filter" data-type="relationship" type="button">沟通</button>
-              <button class="filter" data-type="action" type="button">行动</button>
+        <div id="loadError" class="error-banner" role="alert" hidden></div>
+        <div id="loadingBar" class="loading-bar" hidden></div>
+        <section id="dailyView" class="view">
+          <div class="date-strip" id="dateStrip" aria-label="最近七天"></div>
+          <div class="metric-grid" id="metricGrid"></div>
+          <section class="review-band">
+            <div class="review-mark"><i data-lucide="sparkles"></i></div>
+            <div class="review-copy">
+              <div class="section-kicker">
+                每日总结 <span>本地 · 记录摘要</span>
+              </div>
+              <h2 id="reviewTitle"></h2>
+              <p id="reviewBody"></p>
+              <div class="source-tags" id="sourceTags"></div>
             </div>
+            <div class="review-actions">
+              <button
+                class="icon-button"
+                id="refreshDay"
+                aria-label="重新生成总结"
+                title="重新生成总结"
+              >
+                <i data-lucide="refresh-cw"></i></button
+              ><button
+                class="icon-button"
+                id="exportDay"
+                aria-label="导出当天记录"
+                title="导出当天记录"
+              >
+                <i data-lucide="download"></i>
+              </button>
+            </div>
+          </section>
+          <section class="chart-section">
+            <div class="section-heading">
+              <div>
+                <h2>一天的节奏</h2>
+                <p id="chartCaption">心率记录</p>
+              </div>
+              <div class="segmented" id="intradayMode">
+                <button class="selected" data-mode="heart">心率</button
+                ><button data-mode="steps">步数</button>
+              </div>
+            </div>
+            <div class="chart-frame">
+              <canvas
+                id="dayChart"
+                role="img"
+                aria-label="当天心率曲线"
+              ></canvas>
+              <div class="chart-empty" id="dayChartEmpty" hidden>
+                当天暂无该项数据
+              </div>
+            </div>
+          </section>
+          <div class="daily-columns">
+            <section class="episodes-section">
+              <div class="section-heading">
+                <div>
+                  <h2>
+                    生活片段 <span id="episodeCount" class="count-label"></span>
+                  </h2>
+                </div>
+                <button class="text-button" id="addNote">
+                  <i data-lucide="plus"></i>补充经历
+                </button>
+              </div>
+              <div class="timeline-toolbar">
+                <div class="segmented" id="timelineMode">
+                  <button class="selected" data-mode="episodes">经历</button
+                  ><button data-mode="events">全部记录</button>
+                </div>
+                <label class="search-field"
+                  ><i data-lucide="search"></i
+                  ><input
+                    id="eventSearch"
+                    placeholder="搜索记录"
+                    aria-label="搜索记录"
+                /></label>
+              </div>
+              <div id="episodeList" class="episode-list"></div>
+            </section>
+            <aside class="reflection-column">
+              <section>
+                <div class="section-heading">
+                  <h2>值得回看</h2>
+                  <i class="muted-icon" data-lucide="scan-eye"></i>
+                </div>
+                <div id="highlights"></div>
+              </section>
+              <section class="checkin-section">
+                <div class="section-heading">
+                  <h2>今天感觉如何</h2>
+                  <span class="small-muted">状态自评</span>
+                </div>
+                <div
+                  class="mood-options"
+                  id="moodOptions"
+                  role="group"
+                  aria-label="状态自评"
+                ></div>
+                <textarea
+                  id="checkinNote"
+                  maxlength="2000"
+                  rows="3"
+                  placeholder="留一句今天的感受…"
+                  aria-label="今天的感受"
+                ></textarea>
+                <div class="checkin-footer">
+                  <span id="checkinStatus" class="small-muted"></span
+                  ><button class="subtle" id="saveCheckin">
+                    保存记录<i data-lucide="check"></i>
+                  </button>
+                </div>
+              </section>
+            </aside>
           </div>
-          <div id="cards" class="cards" aria-live="polite"></div>
-        </div>
-
-        <aside class="panel timeline-panel">
-          <div class="panel-head">
-            <h2>时间线</h2>
-            <span id="modeBadge" class="badge">local</span>
+        </section>
+        <section id="trendsView" class="view" hidden>
+          <div class="trend-toolbar">
+            <div class="metric-tabs" id="trendMetrics"></div>
+            <select id="trendRange" aria-label="趋势范围">
+              <option value="7">近 7 天</option>
+              <option value="14" selected>近 14 天</option>
+              <option value="30">近 30 天</option>
+              <option value="90">近 90 天</option>
+            </select>
           </div>
-          <div id="timeline" class="timeline"></div>
-        </aside>
-      </section>
+          <section class="trend-section">
+            <div class="section-heading">
+              <div>
+                <div class="section-kicker" id="trendLabel"></div>
+                <div class="trend-value" id="trendValue"></div>
+              </div>
+              <div class="trend-comparison" id="trendComparison"></div>
+            </div>
+            <div class="chart-frame trend-chart">
+              <canvas
+                id="trendChart"
+                role="img"
+                aria-label="个人指标趋势"
+              ></canvas>
+              <div class="chart-empty" id="trendChartEmpty" hidden>
+                这个时间范围暂无该项记录
+              </div>
+            </div>
+            <div class="chart-legend">
+              <span><b></b><span id="trendLegend"></span></span
+              ><span class="small-muted">缺失日期保留空白</span>
+            </div>
+          </section>
+          <div class="section-heading history-heading">
+            <h2>沿着时间，回看自己</h2>
+            <span class="small-muted" id="historyCount"></span>
+          </div>
+          <div id="dayHistory" class="day-history"></div>
+        </section>
+        <section id="importsView" class="view" hidden>
+          <div class="import-heading">
+            <div>
+              <h2>把一天的记录带到这里</h2>
+              <p>Apple 健康 · 结构化记录 · 照片与音视频</p>
+            </div>
+            <a class="subtle" href="/api/template" download
+              ><i data-lucide="file-down"></i>CSV 模板</a
+            >
+          </div>
+          <div id="dropzone" class="dropzone">
+            <div class="upload-symbol"><i data-lucide="cloud-upload"></i></div>
+            <h3>拖入文件，或从电脑选择</h3>
+            <p>XML、ZIP、JSONL、JSON、CSV、照片、录音、视频</p>
+            <button class="primary" id="chooseFiles">
+              <i data-lucide="plus"></i>选择文件</button
+            ><input
+              type="file"
+              id="fileInput"
+              multiple
+              accept=".xml,.zip,.json,.jsonl,.csv,.jpg,.jpeg,.png,.webp,.m4a,.mp3,.wav,.ogg,.flac,.aac,.mp4,.mov"
+              hidden
+            /><span class="upload-privacy"
+              ><i data-lucide="lock-keyhole"></i>同步到此电脑的个人记录</span
+            >
+          </div>
+          <div id="uploadQueue" class="upload-queue" aria-live="polite"></div>
+          <div class="queue-footer" id="queueFooter" hidden>
+            <span class="small-muted" id="queueSummary"></span
+            ><button class="primary" id="startUpload">
+              <i data-lucide="folder-sync"></i>同步记录
+            </button>
+          </div>
+          <section class="import-history">
+            <div class="section-heading">
+              <h2>同步历史</h2>
+              <button
+                class="icon-button"
+                id="refreshImports"
+                aria-label="刷新同步历史"
+                title="刷新同步历史"
+              >
+                <i data-lucide="refresh-cw"></i>
+              </button>
+            </div>
+            <div id="importHistory"></div>
+          </section>
+        </section>
+        <footer class="workspace-footer">
+          <span>AI WATCH <span class="footer-dot">·</span> 日子值得被记住</span
+          ><span id="footerStats"></span>
+        </footer>
+      </div>
     </main>
-
-    <template id="cardTemplate">
-      <article class="review-card">
-        <div class="card-top">
-          <span class="type"></span>
-          <span class="confidence"></span>
+    <dialog id="profileDialog">
+      <form id="profileForm">
+        <div class="dialog-heading">
+          <h2>个人档案</h2>
+          <button
+            type="button"
+            class="icon-button"
+            data-close="profileDialog"
+            aria-label="关闭"
+          >
+            <i data-lucide="x"></i>
+          </button>
         </div>
-        <h3></h3>
-        <p class="time"></p>
-        <p class="body"></p>
-        <div class="suggestion"></div>
-        <details>
-          <summary>查看证据</summary>
-          <ul class="evidence"></ul>
-        </details>
-        <div class="feedback">
-          <button data-feedback="accurate" type="button">准确</button>
-          <button data-feedback="wrong" type="button">不准确</button>
-          <button data-feedback="mute" type="button">别再提</button>
-          <button data-feedback="watch" type="button">继续观察</button>
+        <div class="form-grid">
+          <label>名字<input name="name" required maxlength="80" /></label
+          ><label>身份 / 职业<input name="role" maxlength="80" /></label
+          ><label class="full">城市<input name="city" maxlength="80" /></label
+          ><label class="full"
+            >关于我<textarea
+              name="bio"
+              rows="3"
+              maxlength="400"
+            ></textarea></label
+          ><label class="full"
+            >近期关注<textarea
+              name="goal"
+              rows="2"
+              maxlength="400"
+            ></textarea></label
+          ><label
+            >每日步数目标<input
+              name="stepGoal"
+              type="number"
+              min="100"
+              max="100000"
+              step="100"
+              required /></label
+          ><label
+            >睡眠目标（小时）<input
+              name="sleepGoal"
+              type="number"
+              min="1"
+              max="16"
+              step="0.5"
+              required
+          /></label>
         </div>
-      </article>
-    </template>
-
-    <script src="app.js"></script>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-footer">
+          <button class="subtle" type="button" data-close="profileDialog">
+            取消</button
+          ><button class="primary" type="submit">保存档案</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="noteDialog">
+      <form id="noteForm">
+        <div class="dialog-heading">
+          <h2>补充一段经历</h2>
+          <button
+            class="icon-button"
+            type="button"
+            data-close="noteDialog"
+            aria-label="关闭"
+          >
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="form-grid">
+          <label
+            >开始时间<input
+              type="datetime-local"
+              name="start"
+              required /></label
+          ><label
+            >结束时间（可选）<input type="datetime-local" name="end" /></label
+          ><label
+            >场景<select name="activity">
+              <option value="manual_note">生活记录</option>
+              <option value="deep_work">专注记录</option>
+              <option value="meeting">交流讨论</option>
+              <option value="commute">通勤</option>
+              <option value="walking">散步</option>
+              <option value="reading">阅读</option>
+              <option value="exercise">运动</option>
+            </select></label
+          ><label>地点（可选）<input name="location" maxlength="200" /></label
+          ><label class="full"
+            >这段时间发生了什么<textarea
+              name="text"
+              rows="4"
+              required
+              maxlength="4000"
+            ></textarea>
+          </label>
+        </div>
+        <p class="form-error" role="alert"></p>
+        <div class="dialog-footer">
+          <button class="subtle" type="button" data-close="noteDialog">
+            取消</button
+          ><button class="primary" type="submit">保存经历</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="evidenceDialog">
+      <div class="dialog-heading">
+        <h2>记录详情</h2>
+        <button
+          class="icon-button"
+          data-close="evidenceDialog"
+          aria-label="关闭"
+        >
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div id="evidenceBody"></div>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
   </body>
 </html>

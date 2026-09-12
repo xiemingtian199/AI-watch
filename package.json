@@ -1,0 +1,14 @@
+{
+  "name": "ai-watch-workbench",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "vendor": "node scripts/vendor.cjs",
+    "check": "node --check app/app.js",
+    "test": "python -m unittest discover -s tests -p test_*.py"
+  },
+  "dependencies": {
+    "chart.js": "4.5.1",
+    "lucide": "1.45.0"
+  }
+}

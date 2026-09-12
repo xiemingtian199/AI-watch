@@ -11,3 +11,7 @@ data/sample/apple_20*.jsonl
 data/sample/manual_context_20*.jsonl
 app/data/cards.json
 HANDOFF.md
+node_modules/
+test-results/
+playwright-report/
+.runtime/
