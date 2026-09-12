@@ -171,7 +171,7 @@ def summarize(day, events, mood=None):
             series.append({'time': stamp.strftime('%H:%M'), 'x': stamp.hour+stamp.minute/60, 'y': value})
         if modality == 'sleep_analysis' and stop > stamp:
             category = str(raw.get('value', '')).lower()
-            if 'asleep' in category or category in {'1','3','4','5'}:
+            if 'asleep' in category or number(raw.get('value')) in {1, 3, 4, 5}:
                 intervals['sleep'].append((max(stamp,start), min(stop,end)))
         if modality == 'focus_session':
             if stop <= stamp and number(raw.get('duration_min')) is not None:
@@ -214,7 +214,7 @@ def summarize(day, events, mood=None):
     highlights = []
     if metrics['focus']:
         highlights.append({'type': 'focus', 'title': '留给一件事的时间',
-            'body': f"有明确起止时间的专注记录共 {metrics['focus']} 分钟。", 'evidence': [e['id'] for e in episodes if e['modality']=='focus_session']})
+            'body': f"有明确起止时间的专注记录共 {metrics['focus']} 分钟。", 'evidence': [e['id'] for e in events if e['modality']=='focus_session']})
     if hearts:
         peak = max(series, key=lambda p:p['y'])
         highlights.append({'type': 'heart', 'title': '一个值得回看的时刻',

@@ -12,6 +12,12 @@
   --font: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   color-scheme: light;
 }
+.history-row p,
+.review-copy p,
+.source-tags > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
 * {
   box-sizing: border-box;
 }

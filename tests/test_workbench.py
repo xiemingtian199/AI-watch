@@ -127,8 +127,9 @@ class StoreTests(unittest.TestCase):
     def test_sleep_union_and_in_bed_excluded(self):
         self.put([event('sleep_analysis', 'HKCategoryValueSleepAnalysisAsleepCore', '2026-09-10T23:00:00+08:00', end_timestamp='2026-09-11T07:00:00+08:00'),
                   event('sleep_analysis', 'HKCategoryValueSleepAnalysisAsleepDeep', '2026-09-11T01:00:00+08:00', end_timestamp='2026-09-11T02:00:00+08:00'),
-                  event('sleep_analysis', 'HKCategoryValueSleepAnalysisInBed', '2026-09-11T07:00:00+08:00', end_timestamp='2026-09-11T08:00:00+08:00')])
-        self.assertEqual(self.store.daily('personal', '2026-09-11')['metrics']['sleep'], 7)
+                  event('sleep_analysis', 'HKCategoryValueSleepAnalysisInBed', '2026-09-11T07:00:00+08:00', end_timestamp='2026-09-11T08:00:00+08:00'),
+                  event('sleep_analysis', 3.0, '2026-09-11T07:00:00+08:00', end_timestamp='2026-09-11T07:30:00+08:00')])
+        self.assertEqual(self.store.daily('personal', '2026-09-11')['metrics']['sleep'], 7.5)
         self.assertEqual(self.store.daily('personal', '2026-09-10')['metrics']['sleep'], 1)
 
     def test_focus_duration_only_is_indexed_on_both_days(self):
@@ -140,6 +141,8 @@ class StoreTests(unittest.TestCase):
         result = self.put([event('focus_session', stamp='2026-09-10T23:00:00+08:00', end_timestamp='2026-09-11T00:00:00+08:00')])
         self.assertEqual(result['dates'], ['2026-09-10'])
         self.assertEqual(self.store.daily('personal', '2026-09-11')['eventCount'], 0)
+        report = self.store.daily('personal', '2026-09-10')
+        self.assertEqual(report['highlights'][0]['evidence'], [report['events'][0]['id']])
 
     def test_missing_values_stay_null(self):
         self.put([event('context_note', summary='A quiet afternoon')])
