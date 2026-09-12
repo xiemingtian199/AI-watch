@@ -1,0 +1,7 @@
+timestamp,end_timestamp,source,modality,value,unit,activity,summary
+2026-09-10T08:00:00+08:00,,test_watch,step_count,3000,count,,
+2026-09-10T09:00:00+08:00,,test_watch,heart_rate,70,count/min,,
+2026-09-10T14:00:00+08:00,2026-09-10T15:00:00+08:00,test_journal,focus_session,,,deep_work,First project session
+2026-09-11T08:00:00+08:00,,test_watch,step_count,5000,count,,
+2026-09-11T09:00:00+08:00,,test_watch,heart_rate,76,count/min,,
+2026-09-11T14:00:00+08:00,2026-09-11T15:30:00+08:00,test_journal,focus_session,,,deep_work,Second project session

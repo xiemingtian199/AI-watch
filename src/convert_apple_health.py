@@ -1,6 +1,7 @@
 import argparse
 import json
 import zipfile
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from xml.etree.ElementTree import iterparse
@@ -40,15 +41,20 @@ def parse_apple_datetime(value):
     return datetime.strptime(value, "%Y-%m-%d %H:%M:%S %z")
 
 
+@contextmanager
 def open_export_xml(path):
     path = Path(path)
     if path.suffix.lower() == ".zip":
-        archive = zipfile.ZipFile(path)
-        for name in archive.namelist():
-            if name.endswith("export.xml"):
-                return archive.open(name)
-        raise FileNotFoundError("export.xml not found inside zip")
-    return path.open("rb")
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                if name.endswith("export.xml"):
+                    with archive.open(name) as stream:
+                        yield stream
+                    return
+            raise FileNotFoundError("export.xml not found inside zip")
+    else:
+        with path.open("rb") as stream:
+            yield stream
 
 
 def confidence_for(record_type):
@@ -122,11 +128,12 @@ def convert(input_path, output_path, date=None, source_filter=None):
 
             try:
                 end_time = parse_apple_datetime(elem.attrib["endDate"])
+                start_time = parse_apple_datetime(elem.attrib.get("startDate", elem.attrib["endDate"]))
             except (KeyError, ValueError):
                 elem.clear()
                 continue
 
-            if date and end_time.date().isoformat() != date:
+            if date and not (start_time.date().isoformat() <= date <= end_time.date().isoformat()):
                 elem.clear()
                 continue
 
@@ -146,14 +153,15 @@ def convert(input_path, output_path, date=None, source_filter=None):
 
             raw_key = "bpm" if modality == "heart_rate" else "value"
             event = {
-                "timestamp": end_time.isoformat(),
+                "timestamp": start_time.isoformat(),
+                "end_timestamp": end_time.isoformat(),
                 "source": source_label(source_name),
                 "modality": modality,
                 "raw": {raw_key: value, "unit": unit, "sourceName": source_name},
                 "summary": build_summary(modality, value, unit),
                 "confidence": confidence_for(record_type),
                 "location": "",
-                "context": {"route": "apple", "activity": infer_activity(end_time, modality)},
+                "context": {"route": "apple", "activity": "unknown"},
             }
             out.write(json.dumps(event, ensure_ascii=False) + "\n")
             count += 1

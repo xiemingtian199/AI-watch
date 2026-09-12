@@ -1,79 +1,56 @@
-# AI Watch MVP Project State
+# AI Watch Project State
 
-## Purpose
+## Current Baseline: Local Workbench, 2026-09-12
 
-Personal AI multimodal watch MVP for efficiency users. The current focus is the Apple Watch + iPhone route:
+The project now has a local, persistent workbench rather than a static generated-card viewer.
 
-- Convert Apple Health exports into normalized timeline events.
-- Add lightweight manual context for important time windows.
-- Generate daily review cards.
-- View cards, evidence, timeline, filters, and feedback in a local browser demo.
+- Daily view: dated metrics, comparisons, intraday charts, factual summaries, searchable episodes, source evidence, manual context, mood check-ins, and feedback.
+- Personal timeline: six metric dimensions, 7/14/30/90-day charts, summaries and reflections, navigation back to individual days.
+- Sidebar: editable personal introduction, goals, record-day and source counts.
+- Imports: batched XML/ZIP/JSONL/JSON/CSV and photo/audio/video uploads with progress, retry, file/event deduplication, and history.
+- Storage: SQLite plus private local uploads; isolated synthetic demo dataset.
 
-## Current Implementation
+See [development and verification notes](docs/WORKBENCH.md) for exact behavior and limitations.
 
-- `src/convert_apple_health.py`: converts Apple Health `export.xml` or export zip into JSONL timeline events.
-- `src/generate_cards.py`: generates daily review cards from JSONL events.
-- `src/local_app.py`: local-only analysis service for manual imports and review generation.
-- `src/transcribe_audio.py`: optional local rough transcription with absolute timestamps.
-- `app/import.html`: local analysis workbench.
-- `app/index.html`: review cards and timeline.
-- `data/sample/apple_2026-06-01.jsonl` and `data/sample/diy_2026-06-01.jsonl`: synthetic sample data.
-
-## Local Run
+## Run
 
 ```powershell
-.\start-local-app.ps1
+python src/local_app.py
 ```
 
-Open:
+Open `http://127.0.0.1:4180`. If the port is occupied, pass a different `--port`.
+Python 3.10+ is sufficient for the basic workbench. Audio/video imports require FFmpeg/ffprobe. Frontend dependencies are vendored with their licenses for offline use.
 
-```text
-http://127.0.0.1:4180/import.html
-```
+## Ownership
 
-Optional local rough transcription:
+- `src/workbench.py`: event normalization, persistence, daily projections and import processing.
+- `src/local_app.py`: loopback-only HTTP APIs, upload limits, static-path/origin checks, attachment/media serving.
+- `app/`: browser UI, charts and interaction logic.
+- `tests/test_workbench.py`: storage and HTTP integration tests using temporary synthetic data.
 
-```powershell
-.\install-local-transcription.ps1
-```
+## Verification
 
-## Privacy Policy For Git Sync
+The 2026-09-12 test run passed 26 tests, including actual ffprobe duration extraction, Apple ZIP import, cross-midnight intervals, source deduplication, persistence, privacy boundaries, media ranges and attachments.
+Browser acceptance uses a separate `.runtime/ui-test-data` directory, not personal data. The development record describes the flows and viewports checked.
 
-Do not commit personal exports or generated personal cards by default:
+## Git Sync And Privacy
 
-- `data/raw/`
-- `data/private/`
-- `data/sample/apple_20*.jsonl`
-- `data/sample/manual_context_20*.jsonl`
-- `app/data/cards.json`
-- `HANDOFF.md`
+Commit code, documentation, dependency licenses and synthetic fixtures only. Do not commit:
 
-If personal data needs to move between computers, use a private encrypted channel or explicitly approve committing it to a private GitHub repository.
+- `data/private/` or `data/raw/`
+- recordings, health exports, local databases or generated personal summaries
+- local takeover backups, credentials or `.env`
 
-## Latest Local Experiment Summary
+The existing `PROJECT_STATE.local-takeover-2026-06-03.md` backup belongs to the local workspace and is not part of this change.
 
-On the original machine, Apple Health data for 2026-06-03 was converted and combined with manual context:
+Before continuing on another computer, fetch the current development branch, read this file and `docs/WORKBENCH.md`, then run tests. Do not assume private data was transferred with the repository.
 
-- 513 Apple Health events
-- 7 manual context events
-- 520 total events
-- 8 review cards generated
+## Next Development
 
-Manual context captured:
+- Validate import performance against large, consented real-world health exports.
+- Add configurable source selection and source-overlap reconciliation; present values can differ from Apple Health totals.
+- Add automatic capture and incremental HealthKit ingestion.
+- Add validated local/model-assisted multimedia understanding and personal baselines.
+- Add explicit private-data export/restore and deletion workflows.
 
-- 07:43-08:03: leaving home, elevator, walking to subway, subway ride and transfer.
-- 07:00-07:59: waking up, washing, breakfast, then commute start.
-- 10:06-18:26: office routine work, 12:00-13:00 lunch break, no meetings.
-
-This personal data is intentionally excluded from Git by default.
-
-## Next Step
-
-Use the workbench daily:
-
-- Import the latest Apple Health export for the target date.
-- Batch import multiple timestamped recordings. Filenames such as `2026-06-04 07-21.m4a` automatically provide the recording start time.
-- Recordings can be selected through a file dialog or dragged into the workbench; no manual path entry is required.
-- Add a short reliable scene summary for each recording.
-- Add manual context for unexplained heart-rate/activity windows.
-- Review cards and track whether audio improves the usefulness of the daily review.
+The [reassessment](docs/REASSESSMENT-2026-09-12.md) remains the long-term proposal. Device integrations and model accuracy are not implemented or validated by this UI milestone. `IMPLEMENTATION.md` and the legacy card/transcription scripts are historical context, not the current browser workflow.

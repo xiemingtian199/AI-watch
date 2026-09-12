@@ -1,337 +1,202 @@
 import argparse
+import hashlib
 import json
 import mimetypes
+import os
 import re
-import shutil
-import subprocess
-import sys
 import threading
+import uuid
 import webbrowser
-from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-from convert_apple_health import convert
-from generate_cards import build_timeline, heuristic_cards, load_events
-
+from workbench import Workbench
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_DIR = ROOT / "app"
-PRIVATE_DIR = ROOT / "data" / "private"
-IMPORTS_DIR = PRIVATE_DIR / "imports"
-CARDS_PATH = APP_DIR / "data" / "cards.json"
-
-
-def json_response(handler, payload, status=200):
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
-
-
-def read_json(handler):
-    length = int(handler.headers.get("Content-Length", "0"))
-    if length > 2_000_000:
-        raise ValueError("请求内容过大")
-    return json.loads(handler.rfile.read(length).decode("utf-8"))
-
-
-def resolve_user_path(value):
-    path = Path(value).expanduser().resolve()
-    if not path.exists():
-        raise FileNotFoundError(f"找不到文件：{path}")
-    return path
-
-
-def safe_filename(value):
-    name = Path(value).name
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
-    if not name:
-        raise ValueError("文件名无效")
-    return name
-
-
-def receive_upload(handler):
-    length = int(handler.headers.get("Content-Length", "0"))
-    if length <= 0:
-        raise ValueError("没有收到文件内容")
-    if length > 2_000_000_000:
-        raise ValueError("单个文件不能超过 2 GB")
-    filename = safe_filename(unquote(handler.headers.get("X-Filename", "")))
-    IMPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    target = IMPORTS_DIR / filename
-    if target.exists():
-        stem, suffix = target.stem, target.suffix
-        target = IMPORTS_DIR / f"{stem}_{datetime.now().strftime('%H%M%S')}{suffix}"
-    remaining = length
-    with target.open("wb") as output:
-        while remaining:
-            chunk = handler.rfile.read(min(1024 * 1024, remaining))
-            if not chunk:
-                raise ConnectionError("文件上传中断")
-            output.write(chunk)
-            remaining -= len(chunk)
-    return target
-
-
-def generate_for_date(target_date):
-    events = load_events(ROOT / "data", target_date)
-    if not events:
-        raise ValueError(f"{target_date} 没有可分析的数据")
-    cards = heuristic_cards(events, target_date)
-    summary = {
-        "eventCount": len(events),
-        "sources": count_by(events, "source"),
-        "modalities": count_by(events, "modality"),
-    }
-    result = {
-        "date": target_date,
-        "generatedAt": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "mode": "local_heuristic",
-        "summary": summary,
-        "cards": cards,
-        "timeline": build_timeline(events),
-    }
-    CARDS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CARDS_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    return result
-
-
-def count_by(events, field):
-    counts = {}
-    for event in events:
-        value = event.get(field, "unknown")
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def probe_audio(path):
-    command = [
-        "ffprobe", "-v", "error",
-        "-show_entries",
-        "format=duration,size,bit_rate,format_name:format_tags:stream=codec_name,sample_rate,channels,bit_rate",
-        "-of", "json", str(path),
-    ]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-    return json.loads(result.stdout)
-
-
-def write_audio_session(path, start_iso, summary):
-    metadata = probe_audio(path)
-    stream = (metadata.get("streams") or [{}])[0]
-    fmt = metadata.get("format") or {}
-    start = datetime.fromisoformat(start_iso)
-    duration = float(fmt.get("duration", 0))
-    end = start + timedelta(seconds=duration)
-    size = int(fmt.get("size", path.stat().st_size))
-    bit_rate = int(fmt.get("bit_rate", stream.get("bit_rate", 0)) or 0)
-    row = {
-        "timestamp": start.isoformat(),
-        "end_timestamp": end.isoformat(),
-        "source": "audio_analysis",
-        "modality": "audio_session",
-        "raw": {
-            "file": path.name,
-            "duration_sec": round(duration, 2),
-            "size_bytes": size,
-            "codec": stream.get("codec_name"),
-            "sample_rate_hz": int(stream.get("sample_rate", 0) or 0),
-            "channels": stream.get("channels"),
-            "bit_rate_bps": bit_rate,
-            "size_mb_per_hour": round(size / 1024 / 1024 / max(duration / 3600, 0.001), 2),
-        },
-        "summary": summary or "手动导入的录音，尚未补充场景摘要。",
-        "confidence": 0.7 if summary else 0.5,
-        "location": "",
-        "context": {"route": "iphone_audio", "activity": "imported_audio"},
-    }
-    PRIVATE_DIR.mkdir(parents=True, exist_ok=True)
-    output = PRIVATE_DIR / f"audio_session_{start.strftime('%Y-%m-%d_%H%M')}.jsonl"
-    output.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
-    return row, output
-
-
-def infer_audio_start(path):
-    match = re.search(
-        r"(?P<date>\d{4}-\d{2}-\d{2})[ _](?P<hour>\d{2})[-_:](?P<minute>\d{2})",
-        path.stem,
-    )
-    if not match:
-        return None
-    return f"{match.group('date')}T{match.group('hour')}:{match.group('minute')}:00+08:00"
-
-
-def transcribe_audio(path, start_iso):
-    deps = ROOT / ".local-deps"
-    if not deps.exists():
-        raise RuntimeError("尚未安装本地转写组件，请先运行 install-local-transcription.ps1")
-    output = PRIVATE_DIR / f"audio_{datetime.fromisoformat(start_iso).strftime('%Y-%m-%d_%H%M')}.raw-transcript.json"
-    command = [
-        sys.executable, str(ROOT / "src" / "transcribe_audio.py"),
-        "--audio", str(path),
-        "--output", str(output),
-        "--start", start_iso,
-        "--model", "small",
-        "--deps", str(deps),
-    ]
-    result = subprocess.run(command, capture_output=True, text=True, check=True)
-    last_line = result.stdout.strip().splitlines()[-1]
-    return json.loads(last_line), output
-
-
-def append_context(payload):
-    timestamp = datetime.fromisoformat(payload["timestamp"])
-    text = payload["text"].strip()
-    if not text:
-        raise ValueError("场景说明不能为空")
-    event = {
-        "timestamp": timestamp.isoformat(),
-        "source": "manual_context",
-        "modality": "context_note",
-        "raw": {"text": text},
-        "summary": text,
-        "confidence": 1.0,
-        "location": payload.get("location", ""),
-        "context": {
-            "route": "manual",
-            "activity": payload.get("activity", "manual_note"),
-        },
-    }
-    PRIVATE_DIR.mkdir(parents=True, exist_ok=True)
-    output = PRIVATE_DIR / f"manual_context_{timestamp.date().isoformat()}.jsonl"
-    with output.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
-    return event, output
+APP_DIR = ROOT / 'app'
+PRIVATE_DIR = Path(os.environ.get('AI_WATCH_DATA_DIR', ROOT / 'data' / 'private'))
 
 
 class LocalHandler(SimpleHTTPRequestHandler):
-    def translate_path(self, path):
-        parsed = urlparse(path).path
-        relative = unquote(parsed).lstrip("/") or "index.html"
-        return str((APP_DIR / relative).resolve())
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(APP_DIR), **kwargs)
 
-    def log_message(self, format, *args):
-        print(f"[local-app] {self.address_string()} {format % args}")
+    def log_message(self, fmt, *args):
+        pass
+
+    def end_headers(self):
+        self.send_header('X-Content-Type-Options','nosniff')
+        self.send_header('Cache-Control','no-store')
+        self.send_header('Referrer-Policy','no-referrer')
+        self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'")
+        super().end_headers()
+
+    def send_json(self, payload, status=200, filename=None):
+        body = json.dumps(payload,ensure_ascii=False,allow_nan=False).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type','application/json; charset=utf-8')
+        self.send_header('Content-Length',str(len(body)))
+        if filename:
+            self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+        self.end_headers()
+        self.wfile.write(body)
+
+    def valid_origin(self):
+        host = self.headers.get('Host','')
+        expected = {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'}
+        origin = self.headers.get('Origin')
+        return host in expected and (not origin or origin in {f'http://{h}' for h in expected})
 
     def do_GET(self):
-        path = urlparse(self.path).path
-        if path == "/api/status":
-            return json_response(self, {
-                "ok": True,
-                "root": str(ROOT),
-                "privateDir": str(PRIVATE_DIR),
-                "cardsExists": CARDS_PATH.exists(),
-                "privacy": "所有导入数据仅保存在本机 data/private，默认不会提交到 GitHub。",
-            })
-        return super().do_GET()
+        if not self.valid_origin():
+            return self.send_json({'error':'请求来源不受支持'},403)
+        parsed = urlparse(self.path)
+        query = parse_qs(parsed.query)
+        try:
+            dataset = self.server.store.dataset(query.get('dataset',['personal'])[0])
+            if parsed.path == '/api/overview':
+                return self.send_json(self.server.store.overview(dataset))
+            if parsed.path in {'/api/day','/api/export'}:
+                report = self.server.store.daily(dataset,query.get('date',[''])[0])
+                filename = f'ai-watch-{dataset}-{report["date"]}.json' if parsed.path == '/api/export' else None
+                return self.send_json(report, filename=filename)
+            if parsed.path == '/api/imports':
+                return self.send_json({'imports':self.server.store.imports()})
+            if parsed.path == '/api/status':
+                return self.send_json({'ok':True,'mode':'local'})
+            if parsed.path.startswith('/api/media/'):
+                return self.send_media(self.server.store.media(parsed.path.rsplit('/',1)[1]))
+            if parsed.path == '/api/template':
+                text = 'timestamp,end_timestamp,source,modality,value,unit,activity,summary\n2026-09-12T09:00:00+08:00,,apple_watch,heart_rate,72,count/min,,\n2026-09-12T14:00:00+08:00,2026-09-12T15:00:00+08:00,manual_context,focus_session,,,deep_work,整理项目方案\n'
+                data = ('\ufeff'+text).encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type','text/csv; charset=utf-8')
+                self.send_header('Content-Disposition','attachment; filename="ai-watch-template.csv"')
+                self.send_header('Content-Length',str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            relative = unquote(parsed.path).lstrip('/') or 'index.html'
+            target = (APP_DIR/relative).resolve()
+            if not target.is_relative_to(APP_DIR.resolve()) or not target.is_file():
+                return self.send_error(404)
+            return super().do_GET()
+        except (ValueError,KeyError,FileNotFoundError) as exc:
+            return self.send_json({'error':str(exc)},400)
+
+    def send_media(self,path):
+        size = path.stat().st_size
+        start,end,status = 0,size-1,200
+        requested = self.headers.get('Range','')
+        if requested:
+            match = re.fullmatch(r'bytes=(\d*)-(\d*)',requested)
+            if not match or not any(match.groups()):
+                return self.send_error(416)
+            if match[1]:
+                start = int(match[1])
+                end = min(int(match[2]),size-1) if match[2] else size-1
+            else:
+                start = max(0,size-int(match[2]))
+            if start>end or start>=size:
+                return self.send_error(416)
+            status = 206
+        self.send_response(status)
+        self.send_header('Content-Type',mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+        self.send_header('Accept-Ranges','bytes')
+        self.send_header('Content-Length',str(end-start+1))
+        if status==206:
+            self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
+        self.end_headers()
+        with path.open('rb') as stream:
+            stream.seek(start)
+            remaining = end-start+1
+            while remaining:
+                data = stream.read(min(65536,remaining))
+                if not data:
+                    break
+                self.wfile.write(data)
+                remaining -= len(data)
+
+    def read_payload(self):
+        length = int(self.headers.get('Content-Length','0'))
+        if not 0 < length <= 2_000_000:
+            raise ValueError('请求大小无效')
+        return json.loads(self.rfile.read(length).decode('utf-8'))
+
+    def upload(self):
+        name = Path(unquote(self.headers.get('X-Filename',''))).name
+        if not name or len(name)>250:
+            raise ValueError('文件名无效')
+        suffix = Path(name).suffix.lower()
+        length = int(self.headers.get('Content-Length','0'))
+        limit = 1024*1024*1024 if suffix not in {'.json','.jsonl','.csv'} else 64*1024*1024
+        if not 0 < length <= limit:
+            raise ValueError(f'文件为空或超过 {limit//1024//1024} MB 限制')
+        folder = self.server.store.directory/'uploads'
+        folder.mkdir(exist_ok=True)
+        path = folder/(uuid.uuid4().hex+suffix)
+        digest = hashlib.sha256()
+        remaining = length
+        try:
+            with path.open('wb') as output:
+                while remaining:
+                    part = self.rfile.read(min(1024*1024,remaining))
+                    if not part:
+                        raise ValueError('文件传输中断，请重试')
+                    digest.update(part)
+                    output.write(part)
+                    remaining-=len(part)
+            result = self.server.store.import_file(path,name,digest.hexdigest(),
+                unquote(self.headers.get('X-Start','')) or None,
+                unquote(self.headers.get('X-Summary','')))
+            if result['duplicate']:
+                path.unlink(missing_ok=True)
+            return result
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
 
     def do_POST(self):
+        if not self.valid_origin():
+            return self.send_json({'error':'请求来源不受支持'},403)
         try:
-            path = urlparse(self.path).path
-            if path == "/api/upload-audio":
-                uploaded = receive_upload(self)
-                inferred_start = infer_audio_start(uploaded)
-                return json_response(self, {
-                    "ok": True,
-                    "message": f"已接收 {uploaded.name}",
-                    "path": str(uploaded),
-                    "filename": uploaded.name,
-                    "start": inferred_start,
-                    "sizeBytes": uploaded.stat().st_size,
-                })
-            payload = read_json(self)
-            if path == "/api/import-health":
-                target_date = payload["date"]
-                source = resolve_user_path(payload["path"])
-                PRIVATE_DIR.mkdir(parents=True, exist_ok=True)
-                output = PRIVATE_DIR / f"apple_{target_date}.jsonl"
-                count = convert(source, output, date=target_date)
-                result = generate_for_date(target_date)
-                return json_response(self, {
-                    "ok": True, "message": f"已导入 {count} 条 Apple 健康数据",
-                    "output": str(output), "result": result,
-                })
-            if path == "/api/import-audio":
-                source = resolve_user_path(payload["path"])
-                start_iso = payload.get("start") or infer_audio_start(source)
-                if not start_iso:
-                    raise ValueError("无法从文件名识别开始时间，请手动填写")
-                row, output = write_audio_session(
-                    source, start_iso, payload.get("summary", "").strip()
-                )
-                transcript = None
-                transcript_output = None
-                if payload.get("transcribe"):
-                    transcript, transcript_output = transcribe_audio(source, payload["start"])
-                result = generate_for_date(row["timestamp"][:10])
-                return json_response(self, {
-                    "ok": True, "message": "录音元数据已导入",
-                    "output": str(output), "audio": row,
-                    "transcript": transcript,
-                    "transcriptOutput": str(transcript_output) if transcript_output else None,
-                    "result": result,
-                })
-            if path == "/api/import-audios":
-                items = payload.get("items") or []
-                if not items:
-                    raise ValueError("请至少添加一段录音")
-                imported = []
-                dates = set()
-                for item in items:
-                    source = resolve_user_path(item["path"])
-                    start_iso = item.get("start") or infer_audio_start(source)
-                    if not start_iso:
-                        raise ValueError(f"无法从文件名识别开始时间：{source.name}")
-                    row, output = write_audio_session(
-                        source, start_iso, item.get("summary", "").strip()
-                    )
-                    imported.append({
-                        "file": source.name,
-                        "start": row["timestamp"],
-                        "end": row["end_timestamp"],
-                        "output": str(output),
-                        "sizeMbPerHour": row["raw"]["size_mb_per_hour"],
-                    })
-                    dates.add(row["timestamp"][:10])
-                results = {date: generate_for_date(date) for date in sorted(dates)}
-                latest = results[sorted(results)[-1]]
-                return json_response(self, {
-                    "ok": True,
-                    "message": f"已导入 {len(imported)} 段录音",
-                    "imported": imported,
-                    "results": results,
-                    "result": latest,
-                })
-            if path == "/api/add-context":
-                event, output = append_context(payload)
-                result = generate_for_date(event["timestamp"][:10])
-                return json_response(self, {
-                    "ok": True, "message": "场景说明已加入时间线",
-                    "output": str(output), "result": result,
-                })
-            if path == "/api/generate":
-                result = generate_for_date(payload["date"])
-                return json_response(self, {"ok": True, "message": "复盘已生成", "result": result})
-            return json_response(self, {"ok": False, "error": "未知接口"}, 404)
+            route = urlparse(self.path).path
+            if route == '/api/upload':
+                return self.send_json(self.upload())
+            payload = self.read_payload()
+            dataset = self.server.store.dataset(payload.get('dataset','personal'))
+            if route == '/api/profile':
+                return self.send_json(self.server.store.save_profile(dataset,payload))
+            if route == '/api/note':
+                return self.send_json(self.server.store.note(dataset,payload))
+            if route == '/api/checkin':
+                self.server.store.checkin(dataset,payload)
+                return self.send_json({'ok':True})
+            if route == '/api/feedback':
+                self.server.store.set_feedback(dataset,payload)
+                return self.send_json({'ok':True})
+            return self.send_json({'error':'接口不存在'},404)
         except Exception as exc:
-            return json_response(self, {"ok": False, "error": str(exc)}, 400)
+            self.send_json({'error':str(exc)},400)
+
+
+def create_server(port=4180,directory=None):
+    server = ThreadingHTTPServer(('127.0.0.1',port),LocalHandler)
+    server.store = Workbench(directory or PRIVATE_DIR)
+    return server
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=4180)
-    parser.add_argument("--no-browser", action="store_true")
-    args = parser.parse_args()
-    PRIVATE_DIR.mkdir(parents=True, exist_ok=True)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), LocalHandler)
-    url = f"http://127.0.0.1:{args.port}/import.html"
-    print(f"AI Watch 本地分析工作台：{url}")
-    print("数据只在本机处理。按 Ctrl+C 停止。")
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--port',type=int,default=4180)
+    parser.add_argument('--no-browser',action='store_true')
+    args=parser.parse_args()
+    server=create_server(args.port)
+    url=f'http://127.0.0.1:{server.server_port}'
+    print(f'AI Watch 工作台: {url}',flush=True)
     if not args.no_browser:
-        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.8,lambda:webbrowser.open(url)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -340,5 +205,5 @@ def main():
         server.server_close()
 
 
-if __name__ == "__main__":
+if __name__=='__main__':
     main()
