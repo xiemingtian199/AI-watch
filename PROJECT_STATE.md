@@ -67,7 +67,19 @@ Manual context captured:
 
 This personal data is intentionally excluded from Git by default.
 
-## Next Step
+## Reassessment 2026-09-12
+
+See [the project reassessment and proposed roadmap](docs/REASSESSMENT-2026-09-12.md) for the current planning baseline. It covers device research, code findings reproduced with synthetic events, automatic capture, evidence-backed daily reviews, and a two-week validation protocol.
+
+- Reviewed local code and verified remote `main` at `32e4515307f63f2c6521808e6bd3442205a6dbad` before this documentation change.
+- Confirmed misleading fixed work, night-routine, and conversation claims with synthetic inputs; also reproduced cross-day card ID reuse, clock-based activity inference, and an out-of-root static path resolution.
+- The public sample still generates seven cards from 24 events. This is a baseline smoke check, not proof of real-world accuracy.
+- Recommended next development: fix evidence and storage correctness, then add visual episodes, automatic device/HealthKit ingestion, and validated personal baselines.
+- No application code or private data was changed by this reassessment. Device integrations and model performance remain untested.
+
+The earlier workflow below remains available while the roadmap is implemented. The original hardware-first schedule in `IMPLEMENTATION.md` is historical context, not the current recommendation.
+
+## Existing Daily Workflow
 
 Use the workbench daily:
 
